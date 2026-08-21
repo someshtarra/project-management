@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Management Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-container">
+            <h1><i class="fa-solid fa-folder-kanban"></i> Project Hub</h1>
+            <p>Manage your projects efficiently</p>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Dashboard Statistics -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon total"><i class="fa-solid fa-list-check"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Total Projects</span>
+                    <span class="stat-value" id="stat-total">0</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon planned"><i class="fa-regular fa-clock"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Planned</span>
+                    <span class="stat-value" id="stat-planned">0</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon in-progress"><i class="fa-solid fa-spinner"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">In Progress</span>
+                    <span class="stat-value" id="stat-in-progress">0</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon completed"><i class="fa-solid fa-circle-check"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Completed</span>
+                    <span class="stat-value" id="stat-completed">0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Actions & Control Bar -->
+        <section class="controls-bar">
+            <h2>Projects List</h2>
+            <button class="btn btn-primary" id="btn-open-add-modal">
+                <i class="fa-solid fa-plus"></i> Add Project
+            </button>
+        </section>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- Projects Table -->
+        <section class="table-container">
+            <table class="projects-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Project Name</th>
+                        <th>Description</th>
+                        <th>Owner</th>
+                        <th>Status</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="projects-table-body">
+                    <tr>
+                        <td colspan="8" class="text-center">Loading projects...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <!-- Add/Edit Project Modal -->
+    <div class="modal-overlay hidden" id="project-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-title">Add New Project</h3>
+                <button class="btn-close" id="btn-close-modal">&times;</button>
+            </div>
+            <form id="project-form">
+                <input type="hidden" id="project-id">
+                
+                <div class="form-group">
+                    <label for="project-name">Project Name <span class="required">*</span></label>
+                    <input type="text" id="project-name" class="form-control" required placeholder="e.g. Website Redesign">
+                </div>
+
+                <div class="form-group">
+                    <label for="project-description">Description</label>
+                    <textarea id="project-description" class="form-control" rows="3" placeholder="Brief project description..."></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="project-owner">Owner <span class="required">*</span></label>
+                        <input type="text" id="project-owner" class="form-control" required placeholder="e.g. Alice Smith">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project-status">Status <span class="required">*</span></label>
+                        <select id="project-status" class="form-control" required>
+                            <option value="PLANNED">PLANNED</option>
+                            <option value="IN_PROGRESS">IN_PROGRESS</option>
+                            <option value="COMPLETED">COMPLETED</option>
+                            <option value="ON_HOLD">ON_HOLD</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="project-start-date">Start Date</label>
+                        <input type="date" id="project-start-date" class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project-end-date">End Date</label>
+                        <input type="date" id="project-end-date" class="form-control">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save">Save Project</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
