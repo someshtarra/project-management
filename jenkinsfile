@@ -1,87 +1,137 @@
 pipeline {
-  agent any
+    agent any
+
     tools {
-      maven 'maven_3.1'
+        maven 'maven_3.1'
     }
-  stages {
-  
-    stage('checkout code') {
-      steps {
-        echo 'cloning code from github repo'
-        git branch: 'main',
-            url: 'https://github.com/someshtarra/project-management.git'
-      }
+
+    environment {
+        GITHUB_REPO_NAME = 'GITOPS'
+        GITHUB_USER_NAME = 'someshtarra'
+        IMAGE_NAME = 'someshtarra/somesh'
     }
-    
-    stage('SonarQube Scan') {
-      steps {
-        echo 'Scanning project'
-        sh 'ls -ltr'
-        sh '''
-          mvn sonar:sonar \
-          -Dsonar.host.url=http://ec2-52-204-228-208.compute-1.amazonaws.com:9000 \
-          -Dsonar.token=squ_6f65ae9e2d54e8a81cb101dcb7d94a1577ea7909
-          '''
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                echo 'Cloning code from GitHub repo'
+
+                git branch: 'main',
+                    url: 'https://github.com/someshtarra/project-management.git'
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                echo 'Scanning project'
+                sh 'ls -ltr'
+
+                withCredentials([
+                    string(
+                        credentialsId: 'sonarqube-token',
+                        variable: 'SONAR_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        mvn sonar:sonar \
+                        -Dsonar.host.url=http://ec2-52-204-228-208.compute-1.amazonaws.com:9000 \
+                        -Dsonar.token=$SONAR_TOKEN
+                    '''
+                }
+            }
+        }
+
+        stage('Build Artifact') {
+            steps {
+                echo 'Building Maven artifact'
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image'
+
+                sh '''
+                    docker build \
+                    -t ${IMAGE_NAME}:${BUILD_NUMBER} \
+                    -f Dockerfile .
+                '''
+            }
+        }
+
+        stage('Scan Docker Image Using Trivy') {
+            steps {
+                echo 'Scanning Docker image using Trivy'
+
+                sh '''
+                    trivy image ${IMAGE_NAME}:${BUILD_NUMBER}
+                '''
+            }
+        }
+
+        stage('Docker Image Push') {
+            steps {
+                echo 'Logging into Docker Hub'
+
+                withCredentials([
+                    string(
+                        credentialsId: 'dockerhub',
+                        variable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKERHUB_TOKEN" | \
+                        docker login \
+                        -u someshtarra \
+                        --password-stdin
+                    '''
+
+                    echo 'Pushing image to Docker Hub'
+
+                    sh '''
+                        docker push ${IMAGE_NAME}:${BUILD_NUMBER}
+                    '''
+                }
+            }
+        }
+
+        stage('Deployment Checkout') {
+            steps {
+                echo 'Cloning deployment files'
+
+                git branch: 'main',
+                    url: 'https://github.com/someshtarra/GITOPS.git'
+            }
+        }
+
+        stage('Update deploy.yaml') {
+            steps {
+                echo 'Updating deployment file'
+
+                withCredentials([
+                    string(
+                        credentialsId: 'githubtoken',
+                        variable: 'GITHUB_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        git config user.name "someshtarra"
+                        git config user.email "someshtarra@gmail.com"
+
+                        sed -i "s/somesh:.*/somesh:${BUILD_NUMBER}/g" Deployment/deploy.yaml
+
+                        git add Deployment/deploy.yaml
+
+                        git commit -m "Updated build number ${BUILD_NUMBER}" || true
+
+                        git push \
+                        https://${GITHUB_TOKEN}@github.com/${GITHUB_USER_NAME}/${GITHUB_REPO_NAME}.git \
+                        HEAD:main
+                    '''
+                }
+            }
         }
     }
-    
-    stage('Build artifact') {
-      steps {
-        sh ' mvn clean package '
-      }
-    }
-
-    stage('Build Docker image') {
-      steps {
-        echo 'Building image using docker file'
-        sh ' docker build -t someshtarra/somesh:${BUILD_NUMBER} -f Dockerfile . '
-      }
-    }
-    
-    stage('Scan docker image using trivy') {
-      steps {
-        echo 'Scaning image using trivy'
-        sh 'trivy image someshtarra/somesh:${BUILD_NUMBER}'
-      }
-    }
-
-    stage('Docker image push') {
-      script {
-        Withcredentials([string(credentialsId: 'dockerhub', variables: 'dockerhub')])
-        sh ' docker login -u someshtarra -p $dockerhub '
-      }
-      steps {
-        echo 'pushing image to dockerhub'
-        sh ' docker push someshtarra/somesh:${BUILD_NUMBER}'
-      }
-    }
-
-    stage('Deployment checkout') {
-      steps{
-        echo 'clonging deployment files'
-        git branch" 'main',
-           url: 'https://github.com/someshtarra/GITOPS.git'
-      }
-    }
-
-    stage('Update Deploy.yaml file') {
-      enviroment {
-        GITHUB_REPO_NAME = "GITOPS",
-        GITHUB_USER_NAME = "someshtarra"
-      }
-      steps{
-        echo 'Update Deployment File'
-        Withcredentials([string(credentialsId: 'githubtoken', variable: 'githubtoken')])
-        sh '''
-          git config --global user.name "someshtarra"
-          git config --global user.mail "someshtarra@gmail.com"
-
-          sed -i "s/somesh:.*/somesh:${BUILD_NUMBER}/g" Deployment/deploy.yaml
-          git add .
-          git commit -m "upadated build number"
-          git push https://${githubtoken}@github.com/${GITHUB_USER_NAME}/${GITHUB_REPO_NAME}.git HEAD:main
-      }
-    }
-   
-  }
 }
