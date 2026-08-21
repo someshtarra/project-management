@@ -1,0 +1,87 @@
+pipeline {
+  agent any
+    tools {
+      maven 'maven_3.1'
+    }
+  stages {
+  
+    stage('checkout code') {
+      steps {
+        echo 'cloning code from github repo'
+        git branch: 'main ',
+            url: 'https://github.com/someshtarra/project-management.git'
+      }
+    }
+    
+    stage('SonarQube Scan') {
+      steps {
+        echo 'Scanning project'
+        sh 'ls -ltr'
+        sh '''
+          mvn sonar:sonar \
+          -Dsonar.host.url=http://ec2-52-204-228-208.compute-1.amazonaws.com:9000 \
+          -Dsonar.token=squ_6f65ae9e2d54e8a81cb101dcb7d94a1577ea7909
+          '''
+        }
+    }
+    
+    stage('Build artifact') {
+      steps {
+        sh ' mvn clean package '
+      }
+    }
+
+    stage('Build Docker image') {
+      steps {
+        echo 'Building image using docker file'
+        sh ' docker build -t someshtarra/somesh:${BUILD_NUMBER} -f Dockerfile . '
+      }
+    }
+    
+    stage('Scan docker image using trivy') {
+      steps {
+        echo 'Scaning image using trivy'
+        sh 'trivy image someshtarra/somesh:${BUILD_NUMBER}'
+      }
+    }
+
+    stage('Docker image push') {
+      script {
+        Withcredentials([string(credentialsId: 'dockerhub', variables: 'dockerhub')])
+        sh ' docker login -u someshtarra -p $dockerhub '
+      }
+      steps {
+        echo 'pushing image to dockerhub'
+        sh ' docker push someshtarra/somesh:${BUILD_NUMBER}'
+      }
+    }
+
+    stage('Deployment checkout') {
+      steps{
+        echo 'clonging deployment files'
+        git branch" 'main',
+           url: 'https://github.com/someshtarra/GITOPS.git'
+      }
+    }
+
+    stage('Update Deploy.yaml file') {
+      enviroment {
+        GITHUB_REPO_NAME = "GITOPS",
+        GITHUB_USER_NAME = "someshtarra"
+      }
+      steps{
+        echo 'Update Deployment File'
+        Withcredentials([string(credentialsId: 'githubtoken', variable: 'githubtoken')])
+        sh '''
+          git config --global user.name "someshtarra"
+          git config --global user.mail "someshtarra@gmail.com"
+
+          sed -i "s/somesh:.*/somesh:${BUILD_NUMBER}/g" Deployment/deploy.yaml
+          git add .
+          git commit -m "upadated build number"
+          git push https://${githubtoken}@github.com/${GITHUB_USER_NAME}/${GITHUB_REPO_NAME}.git HEAD:main
+      }
+    }
+   
+  }
+}
