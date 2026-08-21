@@ -10,13 +10,13 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -S somesh && adduser -S somesh -G somesh
 
 COPY --from=builder /app/target/project-management-1.0.0.jar app.jar
 
-RUN chown -R appuser:appgroup /app
+RUN chown -R somesh:somesh /app
 
-USER appuser
+USER somesh
 
 EXPOSE 8080
 
