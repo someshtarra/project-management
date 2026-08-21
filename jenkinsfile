@@ -8,7 +8,7 @@ pipeline {
     stage('checkout code') {
       steps {
         echo 'cloning code from github repo'
-        git branch: 'main ',
+        git branch: 'main',
             url: 'https://github.com/someshtarra/project-management.git'
       }
     }
