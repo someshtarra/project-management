@@ -433,12 +433,38 @@ docker run -d \
 
 ---
 
-## CI/CD Readiness & Future Artifacts
+## Kubernetes & AWS EKS Deployment
 
-This repository includes a multi-stage `Dockerfile` and is ready for your CI/CD practice pipelines.
+Kubernetes manifests are provided under the [`k8s/`](file:///Users/someswararaotarra/Desktop/abcd/project-management/k8s/) directory:
+- [`k8s/deployment.yaml`](file:///Users/someswararaotarra/Desktop/abcd/project-management/k8s/deployment.yaml): Manages application pods (2 replicas, CPU/memory limits, probes).
+- [`k8s/service.yaml`](file:///Users/someswararaotarra/Desktop/abcd/project-management/k8s/service.yaml): `LoadBalancer` Service mapping port `80` to container port `8080`.
+- [`k8s/ingress.yaml`](file:///Users/someswararaotarra/Desktop/abcd/project-management/k8s/ingress.yaml): AWS ALB / NGINX Ingress rules.
 
-You can add the following files to this project in your next CI/CD practice steps:
-- **`Jenkinsfile`**: To automate build, test, and containerization steps in Jenkins pipelines.
-- **`Kubernetes YAMLs`**: `deployment.yaml`, `service.yaml`, and `ingress.yaml` to deploy to local or cloud Kubernetes clusters (minikube, k3s, GKE).
-- **`Docker Compose`**: To orchestrate the application together with a PostgreSQL container for local integration testing.
+### Steps to Deploy on Kubernetes (AWS EKS / Minikube)
+
+#### 1. Push Docker Image to Docker Hub / AWS ECR
+```bash
+# Tag image for Docker Hub
+docker tag project-management:1.0.0 someshtarra/project-management:1.0.0
+
+# Push image
+docker push someshtarra/project-management:1.0.0
+```
+
+#### 2. Apply Kubernetes Manifests
+```bash
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/ingress.yaml
+```
+
+#### 3. Verify Deployment & Get Public LoadBalancer URL
+```bash
+# Check pod status
+kubectl get pods
+
+# Get LoadBalancer external IP / AWS URL
+kubectl get svc project-management-service
+```
+
 

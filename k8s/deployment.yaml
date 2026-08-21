@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-management-deployment
+  labels:
+    app: project-management
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: project-management
+  template:
+    metadata:
+      labels:
+        app: project-management
+    spec:
+      containers:
+      - name: project-management
+        image: someshtarra/project-management:1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "default"
+        - name: JAVA_OPTS
+          value: "-Xms256m -Xmx512m"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/projects
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/projects
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
