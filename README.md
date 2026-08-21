@@ -402,12 +402,43 @@ mvn test
 
 ---
 
+## Docker Containerization
+
+A multi-stage [`Dockerfile`](file:///Users/someswararaotarra/Desktop/abcd/project-management/Dockerfile) is included for building lean, security-hardened container images.
+
+### 1. Build Docker Image
+```bash
+docker build -t project-management:1.0.0 .
+```
+
+### 2. Run Container (H2 In-Memory Default)
+```bash
+docker run -d \
+  --name project-management-app \
+  -p 8080:8080 \
+  project-management:1.0.0
+```
+
+### 3. Run Container with PostgreSQL Profile
+```bash
+docker run -d \
+  --name project-management-app \
+  -p 8080:8080 \
+  -e SPRING_PROFILES_ACTIVE=postgres \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/projectdb \
+  -e SPRING_DATASOURCE_USERNAME=postgres \
+  -e SPRING_DATASOURCE_PASSWORD=secret \
+  project-management:1.0.0
+```
+
+---
+
 ## CI/CD Readiness & Future Artifacts
 
-This Java/Spring Boot/Maven application is intentionally kept clean of deployment manifests so you can practice building CI/CD pipelines yourself.
+This repository includes a multi-stage `Dockerfile` and is ready for your CI/CD practice pipelines.
 
-You can add the following files to this project in your CI/CD practice workflow:
-- **`Dockerfile`**: To containerize the application target JAR (`target/project-management-1.0.0.jar`).
+You can add the following files to this project in your next CI/CD practice steps:
 - **`Jenkinsfile`**: To automate build, test, and containerization steps in Jenkins pipelines.
 - **`Kubernetes YAMLs`**: `deployment.yaml`, `service.yaml`, and `ingress.yaml` to deploy to local or cloud Kubernetes clusters (minikube, k3s, GKE).
 - **`Docker Compose`**: To orchestrate the application together with a PostgreSQL container for local integration testing.
+
