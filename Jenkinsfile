@@ -35,7 +35,7 @@ pipeline {
                 ]) {
                     sh '''
                         mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                        -Dsonar.host.url=http://ec2-52-204-228-208.compute-1.amazonaws.com:9000 \
+                        -Dsonar.host.url=http://ec2-34-204-169-100.compute-1.amazonaws.com:9000 \
                         -Dsonar.token=$SONAR_TOKEN
                     '''
                 }
