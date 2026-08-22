@@ -18,6 +18,17 @@ pipleline {
 
   stages {
 
+  stage('Install Docker') {
+    steps {
+      sh '''
+      sudo yum install -y docker
+      sudo systemctl start docker
+      sudo systemctl enable docker
+      sudo usermod -aG docker jenkins
+      '''
+      }
+  }
+
     stage('Checkout stage') {
       steps {
         echo " cloning the code from github"
