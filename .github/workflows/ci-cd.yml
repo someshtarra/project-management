@@ -62,7 +62,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SECRET_SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
-          SONAR_URL="${SECRET_SONAR_HOST_URL:-http://35.171.244.106:9000}"
+          SONAR_URL="${SECRET_SONAR_HOST_URL:-http://35.171.244.106}"
           if [[ "$SONAR_URL" != http* ]]; then
             SONAR_URL="http://${SONAR_URL}"
           fi
