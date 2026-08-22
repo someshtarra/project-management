@@ -1,130 +1,45 @@
 pipeline {
-  agent any
+    agent any
 
-  tools {
-    maven 'maven_3'
-    git 'git'
-  }
-
-  environment {
-    GIT_REPO_URL  = "https://github.com/someshtarra/project-management.git"
-    GIT_USER      = "someshtarra"
-    DOCKER_USER   = "someshtarra"
-    DOCKER_REPO   = "someshtarra/project"
-    GITOPS_REPO   = "https://github.com/someshtarra/GITOPS.git"
-    GIT_BRANCH    = "main"
-    GITOPS_BRANCH = "main"
-    GITOPS_NAME   = "GITOPS"
-  }
-
-  stages {
-
-    stage('Install Docker') {
-      steps {
-        sh '''
-          sudo yum install -y docker
-          sudo systemctl start docker
-          sudo systemctl enable docker
-          sudo usermod -aG docker jenkins
-        '''
-      }
+    tools {
+        maven 'maven_3'
+        git 'git'
     }
 
-    stage('Checkout stage') {
-      steps {
-        echo "Cloning the code from GitHub"
-
-        git(
-          branch: env.GIT_BRANCH,
-          url: env.GIT_REPO_URL
-        )
-      }
+    environment {
+        GIT_REPO_URL  = "https://github.com/someshtarra/project-management.git"
+        GIT_USER      = "someshtarra"
+        DOCKER_USER   = "someshtarra"
+        DOCKER_REPO   = "someshtarra/project"
+        GITOPS_REPO   = "https://github.com/someshtarra/GITOPS.git"
+        GIT_BRANCH    = "main"
+        GITOPS_BRANCH = "main"
+        GITOPS_NAME   = "GITOPS"
     }
 
-  }
-}      }
-    }
+    stages {
 
-    stage('Build and Unit test') {
-      steps{
-        echo "validated, compali and unit test using maven"
-        sh 'mvn clean test'
-      }
-    }
-
-    stage('Sonar Qube test') {
-      steps {
-        echo "Scaning the code using Sonar Qube"
-        withSonarQubeEnv('SonarQube'){
-          sh 'mvn sonar:sonar'
+        stage('Install Docker') {
+            steps {
+                sh '''
+                    sudo yum install -y docker
+                    sudo systemctl start docker
+                    sudo systemctl enable docker
+                    sudo usermod -aG docker jenkins
+                '''
+            }
         }
-      }
-    }
 
-    stage('Quality gate') {
-      steps {
-        timeout(time: 5, unit: 'MINUTES') {
-            waitForQualityGate abortPipeline: true
+        stage('Checkout stage') {
+            steps {
+                echo "Cloning the code from GitHub"
+
+                git(
+                    branch: env.GIT_BRANCH,
+                    url: env.GIT_REPO_URL
+                )
+            }
         }
-      }
-    }
 
-    stage('Build Artifact using maven') {
-      steps {
-        echo 'build the artifact'
-        sh ' mvn clean package'
-      }
     }
-
-    stage('Build docker image') {
-      steps {
-        echo 'Build image using Docker'
-        sh ' docker build -t $DOCKER_REPO:${BUILD_NUMBER} -f Dockerfile .'
-      }
-    }
-
-    stage('Scaning the Image') {
-      steps {
-        echo 'Scaning image using Trivy'
-        sh 'trivy image --severity CRITICAL --exit-code 1 $DOCKER_REPO:${BUILD_NUMBER}'
-      }
-    }
-
-    stage('Docker push to docker-hub') {
-      steps {
-        echo 'upload the image on docker hub'
-        withCredentilas([
-          string(credentialsId: 'dockerhub', variable: 'DOCKER_PS')
-        ]) {
-          sh 'docker login -u $DOCKER_USER --password-stdin'
-          sh 'docker push $DOCKER_REPO:${BUILD_NUMBER}'
-        }
-      }
-    }
-
-    stage('Update GITOPS REPO'){
-      steps{
-        echo 'cloning the gitops repo'
-        git branch: '$GITOPS_BRANCH',
-          url: '$GITOPS_REPO'
-      }
-    }
-
-    stage('Updating yaml file') {
-      steps{
-        echo 'Updating yaml file in gitops repo'
-        withCredentials([
-          string(credentilasId: 'github_token', variable: 'GITHUB_TOKEN')
-        ])
-        sh '''
-        git config --global user.name $USER
-        git config --global user.email $USER_MAIL
-        sed -i 's/$DOCKER_REPO:.*/$DOCKER_REPO:${BUILD_NUMBER}/g' Deployment/deploy.yaml
-        git add .
-        git commit -m "updated build number ${BUILD_NUMBER}"
-        git push https://${GITHUB_TOKEN}@github.com/${GITHUB_USER}/${GITOPS_NAME}.git HEAD:main
-        '''
-      }
-    } 
-  }
 }
