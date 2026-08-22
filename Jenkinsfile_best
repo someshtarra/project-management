@@ -27,13 +27,13 @@ pipleline {
       sudo usermod -aG docker jenkins
       '''
       }
-  }
+     }
 
     stage('Checkout stage') {
       steps {
         echo " cloning the code from github"
-        git branch: $GIT_BRANCH,
-          url: $GIT_REPO_URL
+        git branch: '$GIT_BRANCH',
+          url: '$GIT_REPO_URL'
       }
     }
 
