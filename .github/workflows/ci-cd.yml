@@ -76,20 +76,17 @@ jobs:
 
       # STAGE 7: Docker Push
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push Docker Image to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         run: |
           docker push ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
 
       # STAGE 8: Checkout & Update GitOps Repository
       - name: Checkout GitOps Repository
-        if: ${{ secrets.GITOPS_PAT != '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ env.GITOPS_REPO }}
@@ -97,7 +94,6 @@ jobs:
           path: gitops
 
       - name: Update GitOps Deployment YAML
-        if: ${{ secrets.GITOPS_PAT != '' }}
         run: |
           cd gitops
           git config user.name "github-actions[bot]"
