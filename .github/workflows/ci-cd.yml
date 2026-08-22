@@ -1,0 +1,97 @@
+name: Java CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  DOCKER_IMAGE: someshtarra/project
+  GITOPS_REPO: someshtarra/GITOPS
+  GITOPS_BRANCH: main
+
+jobs:
+  build-test-scan-deploy:
+    name: Build, Test, Scan & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # STAGE 1: Checkout Application Code
+      - name: Checkout Application Code
+        uses: actions/checkout@v4
+
+      # Setup Java JDK 21
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # STAGE 2: Build & Unit Test with JaCoCo Coverage
+      - name: Build and Unit Test with Maven
+        run: mvn clean verify
+
+      # STAGE 3: SonarQube Scan
+      - name: SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+
+      # STAGE 4: SonarQube Quality Gate
+      - name: SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@v1.1.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # STAGE 5: Docker Build
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ env.DOCKER_IMAGE }}:${{ github.run_number }} -f Dockerfile .
+
+      # STAGE 6: Trivy Docker Image Security Scan
+      - name: Trivy Docker Image Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.DOCKER_IMAGE }}:${{ github.run_number }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      # STAGE 7: Docker Push
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push Docker Image to Docker Hub
+        run: |
+          docker push ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
+
+      # STAGE 8: Checkout & Update GitOps Repository
+      - name: Checkout GitOps Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_PAT }}
+          path: gitops
+
+      - name: Update GitOps Deployment YAML
+        run: |
+          cd gitops
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          sed -i "s|image:.*|image: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}|g" Deployment/deploy.yaml || true
+          git add .
+          git commit -m "Update image tag to ${{ github.run_number }} [skip ci]" || true
+          git push origin ${{ env.GITOPS_BRANCH }}
