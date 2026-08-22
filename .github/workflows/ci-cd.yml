@@ -37,17 +37,24 @@ jobs:
       - name: SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SECRET_SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
+          SONAR_URL="${SECRET_SONAR_HOST_URL:-http://35.171.244.106:9000}"
+          if [[ "$SONAR_URL" != http* ]]; then
+            SONAR_URL="http://${SONAR_URL}"
+          fi
+          echo "Using SonarQube URL: ${SONAR_URL}"
           mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-            -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.host.url="${SONAR_URL}" \
+            -Dsonar.token="${SONAR_TOKEN}" \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
       # STAGE 4: SonarQube Quality Gate
       - name: SonarQube Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1.1.0
         timeout-minutes: 5
+        with:
+          scanMetadataReportFile: target/sonar/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -69,17 +76,20 @@ jobs:
 
       # STAGE 7: Docker Push
       - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push Docker Image to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
         run: |
           docker push ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
 
       # STAGE 8: Checkout & Update GitOps Repository
       - name: Checkout GitOps Repository
+        if: ${{ secrets.GITOPS_PAT != '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ env.GITOPS_REPO }}
@@ -87,6 +97,7 @@ jobs:
           path: gitops
 
       - name: Update GitOps Deployment YAML
+        if: ${{ secrets.GITOPS_PAT != '' }}
         run: |
           cd gitops
           git config user.name "github-actions[bot]"
