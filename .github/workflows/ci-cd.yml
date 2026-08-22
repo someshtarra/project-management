@@ -12,16 +12,14 @@ env:
   GITOPS_BRANCH: main
 
 jobs:
-  build-test-scan-deploy:
-    name: Build, Test, Scan & Deploy
+  # STAGE 1: Build & Unit Test
+  build-and-test:
+    name: "Stage 1: Build & Unit Test"
     runs-on: ubuntu-latest
-
     steps:
-      # STAGE 1: Checkout Application Code
-      - name: Checkout Application Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Setup Java JDK 21
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -29,12 +27,37 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # STAGE 2: Build & Unit Test with JaCoCo Coverage
       - name: Build and Unit Test with Maven
         run: mvn clean verify
 
-      # STAGE 3: SonarQube Scan
-      - name: SonarQube Scan
+      - name: Upload Build Artifacts & JaCoCo Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-target
+          path: target/
+
+  # STAGE 2: SonarQube Scan
+  sonarqube-scan:
+    name: "Stage 2: SonarQube Scan"
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Download Build Target
+        uses: actions/download-artifact@v4
+        with:
+          name: build-target
+          path: target/
+
+      - name: Run SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SECRET_SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -49,8 +72,22 @@ jobs:
             -Dsonar.token="${SONAR_TOKEN}" \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
-      # STAGE 4: SonarQube Quality Gate
-      - name: SonarQube Quality Gate
+  # STAGE 3: SonarQube Quality Gate
+  sonarqube-quality-gate:
+    name: "Stage 3: SonarQube Quality Gate"
+    needs: sonarqube-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Build Target
+        uses: actions/download-artifact@v4
+        with:
+          name: build-target
+          path: target/
+
+      - name: Wait for SonarQube Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1.1.0
         timeout-minutes: 5
         with:
@@ -58,12 +95,25 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # STAGE 5: Docker Build
+  # STAGE 4: Docker Build & Security Scan
+  docker-build-and-scan:
+    name: "Stage 4: Docker Build & Trivy Scan"
+    needs: sonarqube-quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Build Target
+        uses: actions/download-artifact@v4
+        with:
+          name: build-target
+          path: target/
+
       - name: Build Docker Image
         run: |
           docker build -t ${{ env.DOCKER_IMAGE }}:${{ github.run_number }} -f Dockerfile .
 
-      # STAGE 6: Trivy Docker Image Security Scan
       - name: Trivy Docker Image Security Scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -74,7 +124,25 @@ jobs:
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
 
-      # STAGE 7: Docker Push
+  # STAGE 5: Docker Push
+  docker-push:
+    name: "Stage 5: Docker Push"
+    needs: docker-build-and-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Build Target
+        uses: actions/download-artifact@v4
+        with:
+          name: build-target
+          path: target/
+
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ env.DOCKER_IMAGE }}:${{ github.run_number }} -f Dockerfile .
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -85,7 +153,12 @@ jobs:
         run: |
           docker push ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
 
-      # STAGE 8: Checkout & Update GitOps Repository
+  # STAGE 6: GitOps Deployment Update
+  gitops-update:
+    name: "Stage 6: GitOps Update"
+    needs: docker-push
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout GitOps Repository
         uses: actions/checkout@v4
         with:
@@ -93,7 +166,7 @@ jobs:
           token: ${{ secrets.GITOPS_PAT }}
           path: gitops
 
-      - name: Update GitOps Deployment YAML
+      - name: Update Deployment Image Tag
         run: |
           cd gitops
           git config user.name "github-actions[bot]"
