@@ -89,7 +89,7 @@ pipleline {
           string(credentialsId: 'dockerhub', variable: 'DOCKER_PS')
         ]) {
           sh 'docker login -u $DOCKER_USER --password-stdin'
-          sh 'docker push $DOCKER_REPO:${BUILD_NUMBER}
+          sh 'docker push $DOCKER_REPO:${BUILD_NUMBER}'
         }
       }
     }
