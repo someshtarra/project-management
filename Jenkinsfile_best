@@ -2,6 +2,7 @@ pipleline {
   agent any
   tools {
     maven 'maven_3'
+    git 'git'
   }
 
   environment {
