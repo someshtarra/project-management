@@ -49,9 +49,11 @@ pipeline {
             steps {
                 echo 'Running SonarQube scan'
 
+                dir('application') {
                     withSonarQubeEnv('SonarQube') {
                         sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
                     }
+                }
             }
         }
 
@@ -91,9 +93,7 @@ pipeline {
             steps {
                 echo 'Scanning Docker image with Trivy'
 
-              //  sh '''
-              //      trivy image --severity CRITICAL --exit-code 1 "$DOCKER_IMAGE:$BUILD_NUMBER"
-              //  '''
+                sh "trivy image --severity HIGH,CRITICAL ${env.DOCKER_IMAGE}:${env.BUILD_NUMBER}"
             }
         }
 
@@ -145,7 +145,7 @@ pipeline {
 
                             git add .
 
-                            git commit -m "Update image tag ${BUILD_NUMBER}"
+                            git commit -m "Update image tag ${BUILD_NUMBER}" || true
                             git push https://${GITHUB_TOKEN}@github.com/${GITHUB_USER}/${GITOPS_REPO_NAME}.git HEAD:${GITOPS_BRANCH}
                         '''
                     }

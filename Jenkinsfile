@@ -65,9 +65,7 @@ pipeline {
             steps {
                 echo 'Scanning Docker image using Trivy'
 
-                sh '''
-                    trivy image ${IMAGE_NAME}:${BUILD_NUMBER}
-                '''
+                sh "trivy image --severity HIGH,CRITICAL ${IMAGE_NAME}:${BUILD_NUMBER}"
             }
         }
 
