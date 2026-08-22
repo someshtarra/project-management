@@ -104,14 +104,12 @@ pipeline {
                 echo 'Pushing image to Docker Hub'
 
                 withCredentials([
-                    usernamePassword(
+                    string(
                         credentialsId: 'dockerhub', variable: 'DOCKER_PASSWORD'
                     )
                 ]) {
                     sh '''
-                        echo "$DOCKER_PASSWORD" | docker login \
-                            -u "$DOCKER_USER" \
-                            --password-stdin
+                        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
 
                         docker push "$DOCKER_IMAGE:$BUILD_NUMBER"
                     '''
