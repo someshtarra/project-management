@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        maven 'maven_1'
+        maven 'maven'
     }
 
     environment {
@@ -27,80 +27,65 @@ pipeline {
         stage('Checkout Application') {
             steps {
                 echo 'Cloning application repository'
-
-                dir('application') {
-                    git branch: env.GITHUB_BRANCH,
-                        url: env.GITHUB_REPO_URL
-                }
+                git branch: env.GITHUB_BRANCH,
+                    url: env.GITHUB_REPO_URL
             }
         }
 
         stage('Build and Unit Test') {
             steps {
-                echo 'Building and running unit tests'
-
-                dir('application') {
-                    sh 'mvn clean test'
-                }
+                echo 'Building Java project, running unit tests, and generating JaCoCo coverage'
+                sh 'mvn clean verify'
             }
         }
 
         stage('SonarQube Scan') {
             steps {
-                echo 'Running SonarQube scan'
-
-                    withSonarQubeEnv('SonarQube') {
-                        sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
-                    }
+                echo 'Running SonarQube scan with JaCoCo test report'
+                withSonarQubeEnv('SonarQube') {
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml'
+                }
             }
         }
 
         stage('Quality Gate') {
             steps {
+                echo 'Waiting for SonarQube Quality Gate result...'
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    script {
+                        def qg = waitForQualityGate abortPipeline: true
+                        if (qg.status != 'OK') {
+                            error "Pipeline aborted due to Quality Gate failure: ${qg.status}"
+                        }
+                    }
                 }
             }
         }
 
         stage('Build Artifact') {
             steps {
-                echo 'Building Maven artifact'
-
-                dir('application') {
-                    sh 'mvn package -DskipTests'
-                }
+                echo 'Building Maven artifact package'
+                sh 'mvn package -DskipTests'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image'
-
-                dir('application') {
-                    sh '''
-                        docker build \
-                            -t "$DOCKER_IMAGE:$BUILD_NUMBER" \
-                            -f Dockerfile .
-                    '''
-                }
+                echo "Building Docker image ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -f Dockerfile ."
             }
         }
 
         stage('Trivy Scan') {
             steps {
-                echo 'Scanning Docker image with Trivy'
-
-              //  sh '''
-              //      trivy image --severity CRITICAL --exit-code 1 "$DOCKER_IMAGE:$BUILD_NUMBER"
-              //  '''
+                echo "Scanning Docker image ${DOCKER_IMAGE}:${BUILD_NUMBER} with Trivy"
+                sh "trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${DOCKER_IMAGE}:${BUILD_NUMBER}"
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
                 echo 'Pushing image to Docker Hub'
-
                 withCredentials([
                     string(
                         credentialsId: 'dockerhub', variable: 'DOCKER_PASSWORD'
@@ -108,7 +93,6 @@ pipeline {
                 ]) {
                     sh '''
                         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
-
                         docker push "$DOCKER_IMAGE:$BUILD_NUMBER"
                     '''
                 }
@@ -118,7 +102,6 @@ pipeline {
         stage('Checkout GitOps Repository') {
             steps {
                 echo 'Cloning GitOps repository'
-
                 dir('gitops') {
                     git branch: env.GITOPS_BRANCH,
                         url: env.GITOPS_REPO_URL
@@ -128,8 +111,7 @@ pipeline {
 
         stage('Update GitOps YAML') {
             steps {
-                echo 'Updating deployment image'
-
+                echo 'Updating deployment image tag'
                 dir('gitops') {
                     withCredentials([
                         string(
@@ -141,11 +123,10 @@ pipeline {
                             git config user.name "$USER"
                             git config user.email "$USER_MAIL"
 
-                            sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|g" Deployment/deploy.yaml
+                            sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|g" Deployment/deploy.yaml || true
 
                             git add .
-
-                            git commit -m "Update image tag ${BUILD_NUMBER}"
+                            git commit -m "Update image tag ${BUILD_NUMBER}" || true
                             git push https://${GITHUB_TOKEN}@github.com/${GITHUB_USER}/${GITOPS_REPO_NAME}.git HEAD:${GITOPS_BRANCH}
                         '''
                     }
