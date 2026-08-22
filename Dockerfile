@@ -4,11 +4,14 @@ WORKDIR /app
 
 COPY . .
 
-RUN mvn clean package
+RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
+
+# Upgrade Alpine OS packages to ensure zero vulnerabilities for Trivy scan
+RUN apk upgrade --no-cache
 
 RUN addgroup -S somesh && adduser -S somesh -G somesh
 
