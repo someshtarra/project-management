@@ -1,5 +1,9 @@
 pipeline {
   agent any
+  tools {
+   maven 'maven_1'
+  }
+
   environment {
      GITHUB_USER = "someshtarra"
      USER = "somesh"
