@@ -1,40 +1,48 @@
-pipleline {
+pipeline {
   agent any
+
   tools {
     maven 'maven_3'
     git 'git'
   }
 
   environment {
-    GIT_REPO_URL = "https://github.com/someshtarra/project-management.git"
-    GIT_USER = "someshtarra"
-    DOCKER_USER = "someshtarra"
-    DOCKER_REPO = "someshtarra/project"
-    GITOPS_REPO = "https://github.com/someshtarra/GITOPS.git"
-    GIT_BRANCH = "main"
+    GIT_REPO_URL  = "https://github.com/someshtarra/project-management.git"
+    GIT_USER      = "someshtarra"
+    DOCKER_USER   = "someshtarra"
+    DOCKER_REPO   = "someshtarra/project"
+    GITOPS_REPO   = "https://github.com/someshtarra/GITOPS.git"
+    GIT_BRANCH    = "main"
     GITOPS_BRANCH = "main"
-    GITOPS_NAME = "GITOPS"
+    GITOPS_NAME   = "GITOPS"
   }
 
   stages {
 
-  stage('Install Docker') {
-    steps {
-      sh '''
-      sudo yum install -y docker
-      sudo systemctl start docker
-      sudo systemctl enable docker
-      sudo usermod -aG docker jenkins
-      '''
+    stage('Install Docker') {
+      steps {
+        sh '''
+          sudo yum install -y docker
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          sudo usermod -aG docker jenkins
+        '''
       }
-     }
+    }
 
     stage('Checkout stage') {
       steps {
-        echo " cloning the code from github"
-        git branch: '$GIT_BRANCH',
-          url: '$GIT_REPO_URL'
+        echo "Cloning the code from GitHub"
+
+        git(
+          branch: env.GIT_BRANCH,
+          url: env.GIT_REPO_URL
+        )
       }
+    }
+
+  }
+}      }
     }
 
     stage('Build and Unit test') {
