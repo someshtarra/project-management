@@ -103,6 +103,9 @@ pipeline {
   stage('Updated yaml file') {
     steps {
        echo 'updating image from gitops'
+      withCredentials([
+        string(credentialId: 'githubtoken', variable: 'githubtoken')
+      ])
        sh '''
            git config --global user.name $USER
            git config --global user.email $USER_MAIL
