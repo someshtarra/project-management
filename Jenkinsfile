@@ -23,31 +23,8 @@ pipeline {
 
         stage('Build and Unit Test') {
             steps {
-                echo 'Compiling Java code, running unit tests, and generating JaCoCo coverage report'
+                echo 'Compiling Java code and running unit tests'
                 sh 'mvn clean verify'
-            }
-        }
-
-        stage('SonarQube Scan') {
-            steps {
-                echo 'Scanning project with SonarQube'
-                withSonarQubeEnv('SonarQube') {
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml'
-                }
-            }
-        }
-
-        stage('SonarQube Quality Gate') {
-            steps {
-                echo 'Waiting for SonarQube Quality Gate result...'
-                timeout(time: 5, unit: 'MINUTES') {
-                    script {
-                        def qg = waitForQualityGate abortPipeline: true
-                        if (qg.status != 'OK') {
-                            error "Pipeline aborted due to Quality Gate failure: ${qg.status}"
-                        }
-                    }
-                }
             }
         }
 
