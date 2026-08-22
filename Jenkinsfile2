@@ -49,11 +49,9 @@ pipeline {
             steps {
                 echo 'Running SonarQube scan'
 
-                dir('application') {
                     withSonarQubeEnv('SonarQube') {
                         sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar'
                     }
-                }
             }
         }
 
