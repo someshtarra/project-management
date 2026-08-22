@@ -8,7 +8,7 @@ pipeline {
     environment {
         GITHUB_REPO_NAME = 'GITOPS'
         GITHUB_USER_NAME = 'someshtarra'
-        IMAGE_NAME = 'someshtarra/somesh'
+        IMAGE_NAME = 'someshtarra/project'
     }
 
     stages {
@@ -120,7 +120,7 @@ pipeline {
                         git config user.name "someshtarra"
                         git config user.email "someshtarra@gmail.com"
 
-                        sed -i "s/somesh:.*/somesh:${BUILD_NUMBER}/g" Deployment/deploy.yaml
+                        sed -i "s/project:.*/project:${BUILD_NUMBER}/g" Deployment/deploy.yaml
 
                         git add Deployment/deploy.yaml
 
