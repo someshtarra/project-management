@@ -1,127 +1,169 @@
 pipeline {
-  agent any
-  tools {
-   maven 'maven_1'
-  }
+    agent any
 
-  environment {
-     GITHUB_USER = "someshtarra"
-     USER = "somesh"
-     USER_MAIL = "someshtarra@gmail.com"
-     GITHUB_REPO_URL = "https://github.com/someshtarra/project-management.git"
-     GITHUB_REPO_NAME = "project-management"
-     GITHUB_BRANCH = "main"
-     DOCKER_USER = "someshtarra"
-     DOCKER_IMAGE = "someshtarra/javaproject"
-     GITOPS_REPO_URL = "https://github.com/someshtarra/GITOPS.git"
-     GITOPS_REPO_NAME = "GITOPS"
-     GITOPS_BRANCH = "main"
-  }
-  stages {
-  stage('install packages') {
-    steps {
-      echo 'install git docker and adding user to docker group'
-      sh '''
-        sudo yum install git -y
-        sudo yum install docker -y
-        sudo systemctl start docker
-        sudo systemctl enable docker
-        sudo usermod -aG docker ec2-user
-        '''
+    tools {
+        maven 'maven_1'
     }
-  }
 
-  stage('Checkout stage') {
-    steps {
-      echo 'cloning code from github'
-      git branch: $GITHUB_BRANCH,
-         url: $GITHUB_REPO_URL
+    environment {
+        GITHUB_USER      = 'someshtarra'
+        USER             = 'somesh'
+        USER_MAIL        = 'someshtarra@gmail.com'
+
+        GITHUB_REPO_URL  = 'https://github.com/someshtarra/project-management.git'
+        GITHUB_REPO_NAME = 'project-management'
+        GITHUB_BRANCH    = 'main'
+
+        DOCKER_USER      = 'someshtarra'
+        DOCKER_IMAGE     = 'someshtarra/javaproject'
+
+        GITOPS_REPO_URL  = 'https://github.com/someshtarra/GITOPS.git'
+        GITOPS_REPO_NAME = 'GITOPS'
+        GITOPS_BRANCH    = 'main'
     }
-  }
 
-  stage('Build and Unit test') {
-    steps {
-      echo 'Build and Unit test using maven'
-      sh ' mvn clean test'
+    stages {
+
+        stage('Checkout Application') {
+            steps {
+                echo 'Cloning application repository'
+
+                dir('application') {
+                    git branch: env.GITHUB_BRANCH,
+                        url: env.GITHUB_REPO_URL
+                }
+            }
+        }
+
+        stage('Build and Unit Test') {
+            steps {
+                echo 'Building and running unit tests'
+
+                dir('application') {
+                    sh 'mvn clean test'
+                }
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                echo 'Running SonarQube scan'
+
+                dir('application') {
+                    withSonarQubeEnv('SonarQube') {
+                        sh 'mvn sonar:sonar'
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build Artifact') {
+            steps {
+                echo 'Building Maven artifact'
+
+                dir('application') {
+                    sh 'mvn package -DskipTests'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image'
+
+                dir('application') {
+                    sh '''
+                        docker build \
+                            -t "$DOCKER_IMAGE:$BUILD_NUMBER" \
+                            -f Dockerfile .
+                    '''
+                }
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                echo 'Scanning Docker image with Trivy'
+
+                sh '''
+                    trivy image \
+                        --severity HIGH,CRITICAL \
+                        --exit-code 1 \
+                        "$DOCKER_IMAGE:$BUILD_NUMBER"
+                '''
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                echo 'Pushing image to Docker Hub'
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login \
+                            -u "$DOCKER_USERNAME" \
+                            --password-stdin
+
+                        docker push "$DOCKER_IMAGE:$BUILD_NUMBER"
+                    '''
+                }
+            }
+        }
+
+        stage('Checkout GitOps Repository') {
+            steps {
+                echo 'Cloning GitOps repository'
+
+                dir('gitops') {
+                    git branch: env.GITOPS_BRANCH,
+                        url: env.GITOPS_REPO_URL
+                }
+            }
+        }
+
+        stage('Update GitOps YAML') {
+            steps {
+                echo 'Updating deployment image'
+
+                dir('gitops') {
+                    withCredentials([
+                        string(
+                            credentialsId: 'githubtoken',
+                            variable: 'GITHUB_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            git config user.name "$USER"
+                            git config user.email "$USER_MAIL"
+
+                            sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|g" Deployment/deploy.yaml
+
+                            git add Deployment/deploy.yaml
+
+                            if ! git diff --cached --quiet; then
+                                git commit -m "Update image tag ${BUILD_NUMBER}"
+                                git push https://${GITHUB_TOKEN}@github.com/${GITHUB_USER}/${GITOPS_REPO_NAME}.git HEAD:${GITOPS_BRANCH}
+                            else
+                                echo "No changes to commit"
+                            fi
+                        '''
+                    }
+                }
+            }
+        }
     }
-  }
-
-  stage('SonarQube Scan') {
-    steps {
-      echo 'Coding scaning using SonarQube'
-      withSonarQubeEnv('SonarQube') {
-        sh 'mvn sonar:sonar'
-      }
-    }
-  }
-
-  stage('Quality gate test') {
-    steps{
-      timeout(time: 5, units: 'MINUTES') {
-          waitForQualityGate abortPipeline: true
-      }
-    }
-  }
-
-  stage('Build Artifact') {
-    steps {
-      echo 'Building artifact using maven'
-      sh 'mvn clean package'
-    }
-  }
-
-  stage('Build docker image') {
-    steps {
-      echo 'Building image using docker'
-      sh 'docker build -t $DOCKER_IMAGE:${BUILD_NUMBER} -f Dockerfile .'
-    }
-  }
-
-  stage('trivy scan') {
-    steps {
-      echo 'scaning image using trivy'
-      sh 'trivy image --severity HIGH, CRITICAL --exit-code 1 $DOCKER_IMAGE:${BUILD_NUMBER}'
-    }
-  }
-
-  stage('Push to dockerhub') {
-    steps {
-      echo 'pushing image to our docker hub'
-      withCredentials([
-       string(credentialsId: 'dockerid', variable: 'DOCKER')
-      ]) {
-        sh 'echo $DOCKER | docker login -u $DOCKER_USER --password-stdin'
-        sh 'docker push $DOCKER_IMAGE:${BUILD_NUMBER}'
-      }
-    }
-  }
-
-  stage('cloning Gitops repo') {
-    steps {
-      echo 'cloning repo from github'
-      git branch: $GITOPS_BRANCH,
-       url: $GITOPS_REPO_URL
-    }
-  }
-
-  stage('Updated yaml file') {
-    steps {
-       echo 'updating image from gitops'
-      withCredentials([
-        string(credentialId: 'githubtoken', variable: 'githubtoken')
-      ])
-       sh '''
-           git config --global user.name $USER
-           git config --global user.email $USER_MAIL
-           sed -i 's/$DOCKER_IMAGE:.*/$DOCKER_IMAGE:${BUILD_NUMBER}/g' Deployment/deploy.yaml
-           git add .
-           git commit -m "updating image tag ${BUILD_NUMBER}"
-           git push https://${githubtoken}@github.com/${GITHUB_USER}/${GITOPS_REPO_NAME}.git HEAD:main
-        
-    }
-  }
-
-
-
-  }
 }
