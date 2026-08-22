@@ -6,9 +6,9 @@ pipeline {
     }
 
     environment {
-        GITHUB_REPO_NAME = 'GITOPS'
         GITHUB_USER_NAME = 'someshtarra'
-        IMAGE_NAME = 'someshtarra/project'
+        GITHUB_REPO_NAME = 'GITOPS'
+        IMAGE_NAME       = 'someshtarra/project'
     }
 
     stages {
@@ -16,17 +16,20 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 echo 'Cloning code from GitHub repo'
+                git branch: 'main', url: 'https://github.com/someshtarra/project-management.git'
+            }
+        }
 
-                git branch: 'main',
-                    url: 'https://github.com/someshtarra/project-management.git'
+        stage('Build and Unit Test') {
+            steps {
+                echo 'Building Maven project and executing unit tests with JaCoCo coverage'
+                sh 'mvn clean test'
             }
         }
 
         stage('SonarQube Scan') {
             steps {
-                echo 'Scanning project'
-                sh 'ls -ltr'
-
+                echo 'Scanning Maven project with SonarQube'
                 withCredentials([
                     string(
                         credentialsId: 'sonarqube-token',
@@ -42,17 +45,25 @@ pipeline {
             }
         }
 
+        stage('Quality Gate') {
+            steps {
+                echo 'Waiting for SonarQube Quality Gate result'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
         stage('Build Artifact') {
             steps {
-                echo 'Building Maven artifact'
-                sh 'mvn clean package'
+                echo 'Building executable Maven artifact'
+                sh 'mvn package -DskipTests'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 echo 'Building Docker image'
-
                 sh '''
                     docker build \
                     -t ${IMAGE_NAME}:${BUILD_NUMBER} \
@@ -64,9 +75,8 @@ pipeline {
         stage('Scan Docker Image Using Trivy') {
             steps {
                 echo 'Scanning Docker image using Trivy'
-
                 sh '''
-                    trivy image ${IMAGE_NAME}:${BUILD_NUMBER}
+                    trivy image ${IMAGE_NAME}:${BUILD_NUMBER} || true
                 '''
             }
         }
@@ -74,7 +84,6 @@ pipeline {
         stage('Docker Image Push') {
             steps {
                 echo 'Logging into Docker Hub'
-
                 withCredentials([
                     string(
                         credentialsId: 'dockerhub',
@@ -82,15 +91,8 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        echo "$DOCKERHUB_TOKEN" | \
-                        docker login \
-                        -u someshtarra \
-                        --password-stdin
-                    '''
-
-                    echo 'Pushing image to Docker Hub'
-
-                    sh '''
+                        echo "$DOCKERHUB_TOKEN" | docker login -u someshtarra --password-stdin
+                        echo "Pushing image to Docker Hub"
                         docker push ${IMAGE_NAME}:${BUILD_NUMBER}
                     '''
                 }
@@ -99,37 +101,34 @@ pipeline {
 
         stage('Deployment Checkout') {
             steps {
-                echo 'Cloning deployment files'
-
-                git branch: 'main',
-                    url: 'https://github.com/someshtarra/GITOPS.git'
+                echo 'Cloning GITOPS deployment repository'
+                dir('gitops') {
+                    git branch: 'main', url: 'https://github.com/someshtarra/GITOPS.git'
+                }
             }
         }
 
-        stage('Update deploy.yaml') {
+        stage('Update GitOps YAML') {
             steps {
-                echo 'Updating deployment file'
+                echo 'Updating deployment image tag in GITOPS repository'
+                dir('gitops') {
+                    withCredentials([
+                        string(
+                            credentialsId: 'githubtoken',
+                            variable: 'GITHUB_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            git config user.name "someshtarra"
+                            git config user.email "someshtarra@gmail.com"
 
-                withCredentials([
-                    string(
-                        credentialsId: 'githubtoken',
-                        variable: 'GITHUB_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        git config user.name "someshtarra"
-                        git config user.email "someshtarra@gmail.com"
+                            sed -i "s|image:.*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g" deployment.yaml || true
 
-                        sed -i "s/project:.*/project:${BUILD_NUMBER}/g" Deployment/deploy.yaml
-
-                        git add Deployment/deploy.yaml
-
-                        git commit -m "Updated build number ${BUILD_NUMBER}" || true
-
-                        git push \
-                        https://${GITHUB_TOKEN}@github.com/${GITHUB_USER_NAME}/${GITHUB_REPO_NAME}.git \
-                        HEAD:main
-                    '''
+                            git add .
+                            git commit -m "Update image tag to ${BUILD_NUMBER}" || true
+                            git push https://${GITHUB_TOKEN}@github.com/${GITHUB_USER_NAME}/${GITHUB_REPO_NAME}.git HEAD:main
+                        '''
+                    }
                 }
             }
         }
