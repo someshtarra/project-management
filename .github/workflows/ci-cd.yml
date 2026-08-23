@@ -66,15 +66,17 @@ jobs:
         run: |
           docker build -t ${{ env.DOCKER_IMAGE }}:${{ github.run_number }} -f Dockerfile .
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push Docker Image to Docker Hub
+      - name: Log in & Push to Docker Hub
+        env:
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKER_PASS: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          docker push ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
+          if [ -z "$DOCKER_USER" ] || [ -z "$DOCKER_PASS" ]; then
+            echo "::warning ::Docker Hub secrets (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN) are not set in GitHub Secrets. Skipping push step."
+          else
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+            docker push ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
+          fi
 
   # STAGE 4: GitOps Deployment Update
   gitops-update:
@@ -82,19 +84,19 @@ jobs:
     needs: docker-push
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout GitOps Repository
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.GITOPS_REPO }}
-          token: ${{ secrets.GITOPS_PAT }}
-          path: gitops
-
-      - name: Update Deployment Image Tag
+      - name: Checkout & Update GitOps Repository
+        env:
+          GITOPS_PAT: ${{ secrets.GITOPS_PAT }}
         run: |
-          cd gitops
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          sed -i "s|image:.*|image: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}|g" Deployment/deploy.yaml || true
-          git add .
-          git commit -m "Update image tag to ${{ github.run_number }} [skip ci]" || true
-          git push origin ${{ env.GITOPS_BRANCH }}
+          if [ -z "$GITOPS_PAT" ]; then
+            echo "::warning ::GITOPS_PAT secret is not set in GitHub Secrets. Skipping GitOps repo update step."
+          else
+            git clone https://${GITOPS_PAT}@github.com/${{ env.GITOPS_REPO }}.git gitops
+            cd gitops
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            sed -i "s|image:.*|image: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}|g" Deployment/deploy.yaml || true
+            git add .
+            git commit -m "Update image tag to ${{ github.run_number }} [skip ci]" || true
+            git push origin ${{ env.GITOPS_BRANCH }}
+          fi
