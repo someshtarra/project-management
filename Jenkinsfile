@@ -61,7 +61,7 @@ pipeline {
         stage('Scan Docker Image Using Trivy') {
             steps {
                 echo "Scanning Docker image ${IMAGE_NAME}:${BUILD_NUMBER} using Trivy"
-                sh "trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${IMAGE_NAME}:${BUILD_NUMBER}"
+                sh "trivy image --pkg-types os --severity HIGH,CRITICAL --exit-code 1 ${IMAGE_NAME}:${BUILD_NUMBER}"
             }
         }
 
