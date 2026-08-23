@@ -106,7 +106,7 @@ pipeline {
                 ]){
                 sh '''
                 git config --global user.name "$USER"
-                git config --global user.mail "$USER_MAIL"
+                git config --global user.email "$USER_MAIL"
 
                 sed -i "s/projectimage:.*/projectimage:${BUILD_NUMBER}/g" Deployment/deploy.yaml
 
