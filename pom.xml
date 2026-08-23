@@ -20,6 +20,8 @@
     <properties>
         <java.version>21</java.version>
         <postgresql.version>42.7.12</postgresql.version>
+        <jackson.version>2.18.8</jackson.version>
+        <tomcat.version>10.1.55</tomcat.version>
         <sonar.projectKey>project-management</sonar.projectKey>
         <sonar.sources>src/main/java</sonar.sources>
         <sonar.tests>src/test/java</sonar.tests>
@@ -27,6 +29,28 @@
         <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
         <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Override Jackson version to fix CVE-2026-54512 & CVE-2026-54513 -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <!-- Override Tomcat Embed Core version to fix CVE-2026-41293 -->
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Spring Boot Starter Web -->
