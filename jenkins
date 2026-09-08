@@ -21,9 +21,6 @@ pipeline {
 
     stages {
 
-        /*
-         * 1. CHECKOUT
-         */
         stage('Checkout') {
             steps {
 
@@ -36,10 +33,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 2. BUILD
-         */
         stage('Build') {
             steps {
 
@@ -52,10 +45,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 3. UNIT TEST
-         */
         stage('Unit Test') {
             steps {
 
@@ -68,12 +57,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 4. SNYK
-         *
-         * Application dependency scanning
-         */
         stage('Snyk Dependency Scan') {
             steps {
 
@@ -86,10 +69,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 5. SONARQUBE
-         */
         stage('SonarQube') {
             steps {
 
@@ -102,10 +81,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 6. DOCKER BUILD
-         */
         stage('Docker Build') {
             steps {
 
@@ -117,12 +92,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 7. TRIVY
-         *
-         * Container vulnerability scanning
-         */
         stage('Trivy Scan') {
             steps {
 
@@ -138,12 +107,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 8. GRYPE
-         *
-         * Container/package vulnerability scanning
-         */
         stage('Grype Scan') {
             steps {
 
@@ -157,10 +120,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 9. PUSH TO ECR
-         */
         stage('Push to ECR') {
             steps {
 
@@ -184,10 +143,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 10. DEPLOY DEV / QA
-         */
         stage('Deploy') {
             steps {
 
@@ -204,10 +159,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 11. SMOKE TEST
-         */
         stage('Smoke Test') {
             steps {
 
@@ -221,10 +172,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 12. PRODUCTION APPROVAL
-         */
         stage('Production Approval') {
 
             when {
@@ -240,10 +187,6 @@ pipeline {
             }
         }
 
-
-        /*
-         * 13. PRODUCTION DEPLOYMENT
-         */
         stage('Production Deployment') {
 
             when {
@@ -267,10 +210,6 @@ pipeline {
         }
     }
 
-
-    /*
-     * POST ACTIONS
-     */
     post {
 
         success {
