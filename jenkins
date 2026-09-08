@@ -1,0 +1,294 @@
+pipeline {
+
+    agent any
+
+    environment {
+        APP_NAME   = 'trading-app'
+        AWS_REGION = 'ap-south-1'
+        ECR_REPO   = '123456789012.dkr.ecr.ap-south-1.amazonaws.com/trading-app'
+
+        IMAGE_TAG  = "${BUILD_NUMBER}"
+        IMAGE_NAME = "${ECR_REPO}:${BUILD_NUMBER}"
+    }
+
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'qa', 'prod'],
+            description: 'Select deployment environment'
+        )
+    }
+
+    stages {
+
+        /*
+         * 1. CHECKOUT
+         */
+        stage('Checkout') {
+            steps {
+
+                git(
+                    url: 'https://github.com/company/trading-app.git',
+                    branch: 'main',
+                    credentialsId: 'github-credentials'
+                )
+
+            }
+        }
+
+
+        /*
+         * 2. BUILD
+         */
+        stage('Build') {
+            steps {
+
+                sh '''
+                    echo "Building application"
+
+                    mvn clean package -DskipTests
+                '''
+
+            }
+        }
+
+
+        /*
+         * 3. UNIT TEST
+         */
+        stage('Unit Test') {
+            steps {
+
+                sh '''
+                    echo "Running unit tests"
+
+                    mvn test
+                '''
+
+            }
+        }
+
+
+        /*
+         * 4. SNYK
+         *
+         * Application dependency scanning
+         */
+        stage('Snyk Dependency Scan') {
+            steps {
+
+                sh '''
+                    echo "Running Snyk dependency scan"
+
+                    snyk test
+                '''
+
+            }
+        }
+
+
+        /*
+         * 5. SONARQUBE
+         */
+        stage('SonarQube') {
+            steps {
+
+                sh '''
+                    echo "Running SonarQube analysis"
+
+                    mvn sonar:sonar
+                '''
+
+            }
+        }
+
+
+        /*
+         * 6. DOCKER BUILD
+         */
+        stage('Docker Build') {
+            steps {
+
+                sh """
+                    docker build \
+                    -t ${IMAGE_NAME} .
+                """
+
+            }
+        }
+
+
+        /*
+         * 7. TRIVY
+         *
+         * Container vulnerability scanning
+         */
+        stage('Trivy Scan') {
+            steps {
+
+                sh """
+                    echo "Scanning Docker image with Trivy"
+
+                    trivy image \
+                    --severity HIGH,CRITICAL \
+                    --exit-code 1 \
+                    ${IMAGE_NAME}
+                """
+
+            }
+        }
+
+
+        /*
+         * 8. GRYPE
+         *
+         * Container/package vulnerability scanning
+         */
+        stage('Grype Scan') {
+            steps {
+
+                sh """
+                    echo "Scanning Docker image with Grype"
+
+                    grype ${IMAGE_NAME} \
+                    --fail-on high
+                """
+
+            }
+        }
+
+
+        /*
+         * 9. PUSH TO ECR
+         */
+        stage('Push to ECR') {
+            steps {
+
+                sh """
+
+                    echo "Logging into ECR"
+
+                    aws ecr get-login-password \
+                    --region ${AWS_REGION} |
+                    docker login \
+                    --username AWS \
+                    --password-stdin ${ECR_REPO.split('/')[0]}
+
+
+                    echo "Pushing image"
+
+                    docker push ${IMAGE_NAME}
+
+                """
+
+            }
+        }
+
+
+        /*
+         * 10. DEPLOY DEV / QA
+         */
+        stage('Deploy') {
+            steps {
+
+                sh """
+                    echo "Deploying ${IMAGE_NAME}"
+
+                    helm upgrade --install trading-app ./helm \
+                    --set image.repository=${ECR_REPO} \
+                    --set image.tag=${IMAGE_TAG} \
+                    --namespace ${ENVIRONMENT} \
+                    --create-namespace
+                """
+
+            }
+        }
+
+
+        /*
+         * 11. SMOKE TEST
+         */
+        stage('Smoke Test') {
+            steps {
+
+                sh '''
+                    echo "Running smoke tests"
+
+                    # Example
+                    curl -f https://trading-app.example.com/health
+                '''
+
+            }
+        }
+
+
+        /*
+         * 12. PRODUCTION APPROVAL
+         */
+        stage('Production Approval') {
+
+            when {
+                expression {
+                    params.ENVIRONMENT == 'prod'
+                }
+            }
+
+            steps {
+
+                input message: 'Do you want to deploy to Production?'
+
+            }
+        }
+
+
+        /*
+         * 13. PRODUCTION DEPLOYMENT
+         */
+        stage('Production Deployment') {
+
+            when {
+                expression {
+                    params.ENVIRONMENT == 'prod'
+                }
+            }
+
+            steps {
+
+                sh """
+                    echo "Deploying ${IMAGE_NAME} to production"
+
+                    helm upgrade --install trading-app ./helm \
+                    --set image.repository=${ECR_REPO} \
+                    --set image.tag=${IMAGE_TAG} \
+                    --namespace prod
+                """
+
+            }
+        }
+    }
+
+
+    /*
+     * POST ACTIONS
+     */
+    post {
+
+        success {
+
+            echo 'Pipeline completed successfully'
+
+        }
+
+        failure {
+
+            echo 'Pipeline failed'
+
+        }
+
+        always {
+
+            echo 'Pipeline execution completed'
+
+        }
+    }
+}
